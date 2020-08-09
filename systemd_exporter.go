@@ -30,5 +30,7 @@ func main() {
 
 	mux.Handle(endpoint, promhttp.HandlerFor(reg, promhttp.HandlerOpts{ErrorHandling: promhttp.ContinueOnError}))
 
+	klog.Infof("Starting systemd exporter")
+
 	klog.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), mux))
 }
