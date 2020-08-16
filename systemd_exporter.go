@@ -24,7 +24,10 @@ func main() {
 	mux := http.NewServeMux()
 	reg := metrics.NewKubeRegistry()
 
-	collector := prometheus.NewSystemdCollector()
+	collector, err := prometheus.NewSystemdCollector()
+	if err != nil {
+		klog.Fatalf("Failed to create Systemd collector: %v", err)
+	}
 
 	reg.CustomMustRegister(collector)
 
