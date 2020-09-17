@@ -5,7 +5,7 @@ Proof of concept systemd monitor daemon.  It is modeled as a cross between https
 ### Run Locally
 ```shell
 make docker
-docker run -p 8080:8080 --volume=/run/systemd:/run/systemd:ro <sha>
+docker run -p 8080:8080 --volume=/run/systemd:/run/systemd:ro --volume=/sys/fs/cgroup:/sys/fs/cgroup:ro <sha>
 curl localhost:8080/metrics
 ```
 
