@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/coreos/go-systemd/dbus"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
@@ -32,6 +33,21 @@ var (
 		metrics.ALPHA,
 		"",
 	)
+	unitMemoryUsage = metrics.NewDesc(
+		"unit_memory_usage_bytes",
+		"Systemd unit memory usage in bytes",
+		[]string{"name"},
+		nil,
+		metrics.ALPHA,
+		"",
+	)
+	allowedUnits = map[string]bool{
+		"kubelet":               true,
+		"containerd":            true,
+		"dockerd":               true,
+		"node-problem-detector": true,
+		"systemd-journald":      true,
+	}
 )
 
 type systemd struct {
@@ -39,6 +55,7 @@ type systemd struct {
 	mountPoints map[string]string
 }
 
+// NewSystemdCollector returns a prometheus collector for systemd
 func NewSystemdCollector() (metrics.StableCollector, error) {
 	allCgroups, err := cgroups.GetCgroupMounts(true)
 	if err != nil {
@@ -50,12 +67,14 @@ func NewSystemdCollector() (metrics.StableCollector, error) {
 			allMountPoints[subsystem] = mount.Mountpoint
 		}
 	}
+	klog.Infof("Initialized with mountpoints: %+v", allMountPoints)
 	return &systemd{mountPoints: allMountPoints}, nil
 }
 
 func (s *systemd) DescribeWithStability(ch chan<- *metrics.Desc) {
 	ch <- unitState
 	ch <- unitCPUUsage
+	ch <- unitMemoryUsage
 }
 
 func (s *systemd) CollectWithStability(ch chan<- metrics.Metric) {
@@ -72,18 +91,18 @@ func (s *systemd) CollectWithStability(ch chan<- metrics.Metric) {
 	}
 	for _, unit := range units {
 		if strings.HasSuffix(unit.Name, ".service") {
-			s.collectUnitState(conn, unit, ch)
-		}
-		if strings.HasSuffix(unit.Name, ".slice") {
-			s.collectUnitSlice(conn, unit, ch)
+			if _, ok := allowedUnits[strings.TrimSuffix(unit.Name, ".service")]; ok {
+				s.collectUnitState(conn, unit, ch)
+				s.collectUnitCgroupMetrics(conn, unit, ch)
+			}
 		}
 	}
 }
 
-func (s *systemd) collectUnitSlice(conn *dbus.Conn, unit dbus.UnitStatus, ch chan<- metrics.Metric) {
-	sliceProperties, err := conn.GetUnitTypeProperties(unit.Name, "Slice")
+func (s *systemd) collectUnitCgroupMetrics(conn *dbus.Conn, unit dbus.UnitStatus, ch chan<- metrics.Metric) {
+	sliceProperties, err := conn.GetUnitTypeProperties(unit.Name, "Service")
 	if err != nil {
-		klog.Warningf("Failed to get unit slice for unit %v. No metrics will be collected: %v", unit.Name, err)
+		klog.Warningf("Failed to get unit service for unit %v. No metrics will be collected: %v", unit.Name, err)
 		return
 	}
 	cgroup, found := sliceProperties["ControlGroup"]
@@ -107,10 +126,16 @@ func (s *systemd) collectUnitSlice(conn *dbus.Conn, unit dbus.UnitStatus, ch cha
 		klog.Warningf("Failed to get stats for cgroup %v: %v", cgroupName, err)
 		return
 	}
+	if stats.CpuStats.CpuUsage.TotalUsage > 0 {
+		ch <- metrics.NewLazyConstMetric(
+			unitCPUUsage, metrics.CounterValue,
+			float64(stats.CpuStats.CpuUsage.TotalUsage)/float64(time.Second),
+			strings.TrimSuffix(unit.Name, ".service"))
+	}
 	ch <- metrics.NewLazyConstMetric(
-		unitCPUUsage, metrics.CounterValue,
-		float64(stats.CpuStats.CpuUsage.TotalUsage),
-		strings.TrimSuffix(unit.Name, ".slice"))
+		unitMemoryUsage, metrics.GaugeValue,
+		float64(stats.MemoryStats.Usage.Usage),
+		strings.TrimSuffix(unit.Name, ".service"))
 }
 
 func (s *systemd) collectUnitState(conn *dbus.Conn, unit dbus.UnitStatus, ch chan<- metrics.Metric) {
