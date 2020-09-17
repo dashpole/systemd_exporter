@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: systemd-exporter
+spec:
+  selector:
+    matchLabels:
+      name: systemd-exporter
+  template:
+    metadata:
+      labels:
+        name: systemd-exporter
+    spec:
+      containers:
+      - name: systemd-exporter
+        image: # FILL THIS IN
+        securityContext:
+          privileged: true
+        resources:
+        volumeMounts:
+        - name: systemd
+          mountPath: /run/systemd
+          readOnly: true
+        - name: cgroup
+          mountPath: /sys/fs/cgroup
+          readOnly: true
+        ports:
+          - name: http
+            containerPort: 8080
+            protocol: TCP
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: systemd
+        hostPath:
+          path: /run/systemd
+      - name: cgroup
+        hostPath:
+          path: /sys/fs/cgroup
