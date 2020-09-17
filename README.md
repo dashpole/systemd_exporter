@@ -21,3 +21,7 @@ kubectl get po
 POD=systemd-exporter-12345
 kubectl get --raw /api/v1/namespaces/default/pods/$POD/proxy/metrics
 ```
+
+### Known Issues
+"authentication protocol error"
+Systemd 239 has a regression: https://github.com/systemd/systemd/issues/9553.  Use a different versoin of systemd.
