@@ -1,5 +1,8 @@
 # systemd_exporter
 
+It turns out someone already made something like this!  Check out https://github.com/povilasv/systemd_exporter.
+
+
 Proof of concept systemd monitor daemon.  It is modeled as a cross between https://github.com/prometheus/node_exporter and https://github.com/google/cadvisor.
 In kubernetes, I usually just want to monitor Kubelet, docker, the Node Problem Detector, journald, and maybe a few others.  cAdvisor is hard to configure, since everything is in terms of cgroups.
 
